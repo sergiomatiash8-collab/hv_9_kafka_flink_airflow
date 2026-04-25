@@ -1,0 +1,15 @@
+FROM flink:1.17.1
+
+RUN apt-get update -y && \
+    apt-get install -y python3 python3-pip python3-dev curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN pip3 install apache-flink
+
+# Скачуємо ОБИДВА потрібні конектори в папку lib
+RUN curl https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/1.17.1/flink-sql-connector-kafka-1.17.1.jar \
+    -o /opt/flink/lib/flink-sql-connector-kafka-1.17.1.jar
+
+RUN curl https://repo1.maven.org/maven2/org/apache/flink/flink-json/1.17.1/flink-json-1.17.1.jar \
+    -o /opt/flink/lib/flink-json-1.17.1.jar

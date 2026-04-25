@@ -1,60 +1,57 @@
 import os
 from pyflink.table import EnvironmentSettings, TableEnvironment
 
-# 1. Налаштовуємо середовище
+# 1. Налаштування
 settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
 t_env = TableEnvironment.create(settings)
+t_env.get_config().set("parallelism.default", "1")
 
-# Вказуємо шлях до Python всередині контейнера
-t_env.get_config().set("python.executable", "/usr/bin/python3")
-
-# 2. ПІДКЛЮЧАЄМО КОННЕКТОРИ
-# Додаємо Kafka Connector ТА JSON формат (необхідно для парсингу)
-kafka_jar = "https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/1.17.1/flink-sql-connector-kafka-1.17.1.jar"
-json_jar = "https://repo1.maven.org/maven2/org/apache/flink/flink-json/1.17.1/flink-json-1.17.1.jar"
-
-t_env.get_config().set("pipeline.jars", f"{kafka_jar};{json_jar}")
-
-# 3. Джерело даних (Kafka)
-# Використовуємо внутрішню мережу Docker (kafka:29092)
+# 2. Джерело (Kafka)
 t_env.execute_sql("""
     CREATE TABLE tweets_source (
         author_id STRING,
         created_at STRING,
-        text STRING
+        `text` STRING
     ) WITH (
         'connector' = 'kafka',
         'topic' = 'tweets',
-        'properties.bootstrap.servers' = 'kafka:29092',
-        'properties.group.id' = 'flink_group',
+        'properties.bootstrap.servers' = '172.20.0.7:9092',
+        'properties.group.id' = 'flink_enrichment_v3',
         'scan.startup.mode' = 'earliest-offset',
         'format' = 'json'
     )
 """)
 
-# 4. Вивід результату (Консоль TaskManager)
+# 3. Вивід (Консоль)
 t_env.execute_sql("""
     CREATE TABLE tweets_enriched (
         author_id STRING,
-        text STRING,
+        `text` STRING,
         processed_at TIMESTAMP(3),
         enrichment_info STRING
-    ) WITH (
-        'connector' = 'print'
-    )
+    ) WITH ( 'connector' = 'print' )
 """)
 
-# 5. Запуск обробки
-print("🚀 Надсилаємо джобу у кластер Flink...")
+print("🚀 Запуск стримінгу (чекаю на дані)...")
+
+# 4. Логіка
 table_result = t_env.execute_sql("""
     INSERT INTO tweets_enriched
     SELECT 
         author_id, 
-        text, 
+        `text`, 
         CURRENT_TIMESTAMP, 
-        'PROCESSED_BY_FLINK_V1' as enrichment_info
+        'COMP: ' || (CASE 
+            WHEN author_id = '115852' THEN 'Amazon'
+            WHEN author_id = '115854' THEN 'Apple'
+            ELSE 'Other'
+        END) || 
+        ' | PRIORITY: ' || (CASE 
+            WHEN `text` LIKE '%broken%' OR `text` LIKE '%bad%' OR `text` LIKE '%error%' THEN 'HIGH'
+            ELSE 'NORMAL'
+        END)
     FROM tweets_source
 """)
 
-# Чекаємо на виконання (стрімінг буде йти вічно, поки не зупиниш)
-table_result.wait()
+# Правильний спосіб тримати скрипт живим до ручної зупинки
+table_result.get_job_client().get_job_execution_result().result()

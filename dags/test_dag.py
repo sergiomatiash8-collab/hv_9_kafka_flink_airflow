@@ -16,8 +16,7 @@ with DAG(
     catchup=False,
 ) as dag:
 
-    # Використовуємо docker exec з гнучким пошуком імені контейнера
-    # Ми шукаємо контейнер, який має в назві 'flink-jobmanager'
+    # Шукаємо контейнер jobmanager і запускаємо в ньому наш пітонівський скрипт
     run_flink_job = BashOperator(
         task_id='run_tweet_processor',
         bash_command="""
