@@ -1,22 +1,29 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from datetime import datetime
+from datetime import datetime, timedelta
+
+default_args = {
+    'owner': 'airflow',
+    'start_date': datetime(2026, 4, 25),
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
 
 with DAG(
-    dag_id='flink_tweet_enrichment',
-    start_date=datetime(2026, 4, 25),
+    'flink_tweet_enrichment',
+    default_args=default_args,
     schedule_interval=None,
     catchup=False,
-    tags=['flink', 'kafka']
 ) as dag:
 
-    # Запускаємо процесор з правильним шляхом до файлу в usrlib
-    run_tweet_processor = BashOperator(
+    # Використовуємо docker exec з гнучким пошуком імені контейнера
+    # Ми шукаємо контейнер, який має в назві 'flink-jobmanager'
+    run_flink_job = BashOperator(
         task_id='run_tweet_processor',
         bash_command="""
-            docker exec hv_9_kafka_flink_airflow-flink-jobmanager-1 \
-            flink run -py /opt/flink/usrlib/03_flink_processor.py
+            CONTAINER_ID=$(docker ps -aqf "name=flink-jobmanager")
+            docker exec $CONTAINER_ID flink run -py /opt/flink/usrlib/03_flink_processor.py
         """
     )
 
-    run_tweet_processor
+    run_flink_job
