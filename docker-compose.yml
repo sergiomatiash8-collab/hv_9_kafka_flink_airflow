@@ -1,73 +1,175 @@
+version: '3.8'
+
 services:
+  # ========== Zookeeper (Координатор для Kafka) ==========
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kafka-network
 
+  # ========== Kafka (Шина даних) ==========
   kafka:
     image: confluentinc/cp-kafka:7.4.0
-    depends_on: [zookeeper]
-    ports: ["9092:9092"]
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Localhost для Windows (зовні), kafka:29092 для контейнерів (всередині)
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - kafka-network
 
+  # ========== PostgreSQL (Основна база для твітів) ==========
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB:-tweets_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d tweets_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kafka-network
+
+  # ========== Flink JobManager (Керуючий вузол) ==========
   flink-jobmanager:
     build:
       context: .
       dockerfile: Dockerfile.flink
-    ports: ["8081:8081"]
+    container_name: flink-jobmanager
     command: jobmanager
-    volumes:
-      - .:/opt/flink/usrlib
+    ports:
+      - "8081:8081"
     environment:
-      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      - ./flink_jobs:/opt/flink/usrlib
+      - ./output:/opt/flink/usrlib/output
+    networks:
+      - kafka-network
 
+  # ========== Flink TaskManager (Робочий вузол) ==========
   flink-taskmanager:
     build:
       context: .
       dockerfile: Dockerfile.flink
-    depends_on: [flink-jobmanager]
+    container_name: flink-taskmanager
     command: taskmanager
-    volumes:
-      - .:/opt/flink/usrlib
+    depends_on:
+      - flink-jobmanager
     environment:
-      - JOB_MANAGER_RPC_ADDRESS=flink-jobmanager
-
-  airflow:
-    build: .
-    ports: ["8082:8080"]
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
     volumes:
-      - ./dags:/opt/airflow/dags
-      - /var/run/docker.sock:/var/run/docker.sock
-      - airflow_data:/opt/airflow
+      - ./flink_jobs:/opt/flink/usrlib
+      - ./output:/opt/flink/usrlib/output
+    networks:
+      - kafka-network
+
+  # ========== Airflow (Оркестратор) ==========
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow
+    ports:
+      - "8080:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - _AIRFLOW_WWW_USER_USERNAME=admin
       - _AIRFLOW_WWW_USER_PASSWORD=admin
-      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
-      - DOCKER_API_VERSION=1.44
-    command: >
-      bash -c "airflow db init &&
-      airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true &&
-      airflow standalone"
-    depends_on: [postgres]
-
-  postgres:
-    image: postgres:13
-    environment:
-      - POSTGRES_USER=airflow
-      - POSTGRES_PASSWORD=airflow
-      - POSTGRES_DB=airflow
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@admin.com || true &&
+      airflow scheduler & airflow webserver"
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+    networks:
+      - kafka-network
+
+  # ========== PostgreSQL для Airflow (Окрема база) ==========
+  postgres-airflow:
+    image: postgres:13
+    container_name: postgres-airflow
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - kafka-network
+
+  # ========== Kafka Producer (Генератор твітів) ==========
+  producer:
+    build:
+      context: .
+      dockerfile: Dockerfile.producer
+    container_name: producer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: tweets
+    volumes:
+      - ./raw_tweets.csv:/app/raw_tweets.csv
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
 
 volumes:
   postgres_data:
-  airflow_data:
+  airflow_postgres_data:
+
+networks:
+  kafka-network:
+    driver: bridge

@@ -1,15 +1,38 @@
-FROM flink:1.17.1
+# Базовий образ Flink з підтримкою Java 11
+FROM flink:1.17.1-scala_2.12-java11
 
-RUN apt-get update -y && \
-    apt-get install -y python3 python3-pip python3-dev curl ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+# Перемикаємося на root для системних налаштувань
+USER root
 
+# 1. Оновлення репозиторіїв та встановлення системних пакетів
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Створюємо симлінк, щоб команда "python" вказувала на "python3"
 RUN ln -s /usr/bin/python3 /usr/bin/python
-RUN pip3 install apache-flink
 
-# Скачуємо ОБИДВА потрібні конектори в папку lib
-RUN curl https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/1.17.1/flink-sql-connector-kafka-1.17.1.jar \
-    -o /opt/flink/lib/flink-sql-connector-kafka-1.17.1.jar
+# 2. Встановлення PyFlink та залежностей з екстремальними тайм-аутами
+RUN pip3 install --no-cache-dir --default-timeout=1000 --retries 50 \
+    apache-flink==1.17.1 \
+    kafka-python \
+    psycopg2-binary \
+    python-dotenv
 
-RUN curl https://repo1.maven.org/maven2/org/apache/flink/flink-json/1.17.1/flink-json-1.17.1.jar \
-    -o /opt/flink/lib/flink-json-1.17.1.jar
+# 3. Завантаження конекторів (Kafka, JDBC та PostgreSQL JDBC Driver)
+# Ми додаємо flink-connector-jdbc, щоб Flink розумів тип таблиць 'jdbc'
+RUN wget -q https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/1.17.1/flink-sql-connector-kafka-1.17.1.jar -P /opt/flink/lib/ && \
+    wget -q https://repo1.maven.org/maven2/org/apache/flink/flink-connector-jdbc/3.1.0-1.17/flink-connector-jdbc-3.1.0-1.17.jar -P /opt/flink/lib/ && \
+    wget -q https://jdbc.postgresql.org/download/postgresql-42.6.0.jar -P /opt/flink/lib/
+
+# 4. Налаштування прав доступу
+RUN mkdir -p /opt/flink/usrlib/output && \
+    chmod -R 777 /opt/flink/usrlib/output && \
+    chown -R flink:flink /opt/flink/usrlib
+
+# Повертаємося до стандартного користувача flink
+USER flink
+WORKDIR /opt/flink
