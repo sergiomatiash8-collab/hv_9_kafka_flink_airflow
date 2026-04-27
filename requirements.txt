@@ -1,15 +1,31 @@
-# Core Dependencies (Обробка даних та Kafka)
-pandas==2.1.0
-kafka-python==2.0.2
-psycopg2-binary==2.9.9
+# Core
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
 
-# Stream Processing (Flink)
+# Data processing
+pandas==2.1.0
+
+# Kafka (ВАЖЛИВО: використовуємо стабільний форк для нових версій Python)
+kafka-python-ng==2.2.2
+
+# Flink
 apache-flink==1.17.1
 
-# Orchestration (Airflow)
-apache-airflow==2.7.0
-apache-airflow-providers-docker==3.7.0
+# Database
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
 
-# Database & Environment (Робота з БД та конфігами)
-SQLAlchemy==2.0.21
-python-dotenv==1.0.0
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Linting
+black==23.12.0
+flake8==6.1.0
+mypy==1.7.1
+isort==5.13.0
+
+# Airflow (Для локальної розробки достатньо інтерфейсів)
+apache-airflow==2.7.0
