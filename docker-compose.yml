@@ -50,7 +50,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
       POSTGRES_DB: ${POSTGRES_DB:-tweets_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init_db.sql:/docker-entrypoint-initdb.d/init.sql
@@ -102,6 +102,23 @@ services:
     networks:
       - kafka-network
 
+  # ========== PostgreSQL для Airflow ==========
+  postgres-airflow:
+    image: postgres:13
+    container_name: postgres-airflow
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - kafka-network
+
   # ========== Airflow (Оркестратор) ==========
   airflow:
     build:
@@ -133,23 +150,6 @@ services:
     networks:
       - kafka-network
 
-  # ========== PostgreSQL для Airflow ==========
-  postgres-airflow:
-    image: postgres:13
-    container_name: postgres-airflow
-    environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
-    volumes:
-      - airflow_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 5s
-      retries: 5
-    networks:
-      - kafka-network
-
   # ========== Kafka Producer (Генератор) ==========
   producer:
     build:
@@ -160,7 +160,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC: tweets
     volumes:
-      - ./raw_tweets.csv:/app/raw_tweets.csv
+      # ВИПРАВЛЕНО: шлях до файлу тепер через папку data
+      - ./data/raw_tweets.csv:/app/raw_tweets.csv
     depends_on:
       kafka:
         condition: service_healthy

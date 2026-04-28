@@ -1,19 +1,19 @@
-# Використовуємо легкий образ Python
 FROM python:3.10-slim
 
-# Встановлюємо робочу директорію всередині контейнера
 WORKDIR /app
 
-# 1. Встановлюємо бібліотеки для Kafka та обробки даних
+# 1. Встановлюємо залежності (використовуємо твої поточні бібліотеки)
 RUN pip install --no-cache-dir \
     kafka-python \
     pandas \
     python-dotenv
 
-# 2. Копіюємо скрипт продюсера та вхідний CSV-файл із твітами
-# Переконайся, що файли лежать у тій же папці, що і Dockerfile
-COPY 02_kafka_producer.py /app/producer.py
-COPY raw_tweets.csv /app/raw_tweets.csv
+# 2. Копіюємо ВЕСЬ код (src), щоб працювали всі імпорти
+COPY src/ /app/src/
+COPY .env /app/.env
 
-# 3. Команда для запуску продюсера при старті контейнера
-CMD ["python", "producer.py"]
+# 3. Додаємо робочу директорію в шлях, щоб Python бачив модуль src
+ENV PYTHONPATH=/app
+
+# 4. Запускаємо через лаунчер (нам треба створити цей один короткий файл)
+CMD ["python", "src/presentation/producer_launcher.py"]
