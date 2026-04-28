@@ -1,0 +1,31 @@
+# Використовуємо легкий образ
+FROM python:3.10-slim
+
+# Встановлюємо робочу директорію
+WORKDIR /app
+
+# Встановлюємо системні залежності для psycopg2 (якщо використовуємо не binary)
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копіюємо файл залежностей (якщо є) або ставимо напряму
+# Для чистоти архітектури краще мати requirements.txt, але пропишемо так:
+RUN pip install --no-cache-dir \
+    kafka-python \
+    psycopg2-binary \
+    pydantic \
+    pydantic-settings \
+    python-dotenv
+
+# Копіюємо весь вихідний код
+# Завдяки .dockerignore (якщо він є), ми не скопіюємо venv та логи
+COPY src/ /app/src/
+COPY .env /app/.env
+
+# Додаємо шлях до системних шляхів Python, щоб працювали імпорти з src
+ENV PYTHONPATH=/app
+
+# Команда запуску нашого presentation layer
+CMD ["python", "src/presentation/consumers/worker.py"]

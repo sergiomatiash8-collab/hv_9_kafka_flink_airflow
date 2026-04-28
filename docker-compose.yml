@@ -28,7 +28,6 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # Localhost для Windows (зовні), kafka:29092 для контейнерів (всередині)
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
@@ -56,14 +55,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init_db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d tweets_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-tweets_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - kafka-network
 
-  # ========== Flink JobManager (Керуючий вузол) ==========
+  # ========== Flink JobManager ==========
   flink-jobmanager:
     build:
       context: .
@@ -83,7 +82,7 @@ services:
     networks:
       - kafka-network
 
-  # ========== Flink TaskManager (Робочий вузол) ==========
+  # ========== Flink TaskManager ==========
   flink-taskmanager:
     build:
       context: .
@@ -129,10 +128,12 @@ services:
     depends_on:
       postgres-airflow:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     networks:
       - kafka-network
 
-  # ========== PostgreSQL для Airflow (Окрема база) ==========
+  # ========== PostgreSQL для Airflow ==========
   postgres-airflow:
     image: postgres:13
     container_name: postgres-airflow
@@ -149,7 +150,7 @@ services:
     networks:
       - kafka-network
 
-  # ========== Kafka Producer (Генератор твітів) ==========
+  # ========== Kafka Producer (Генератор) ==========
   producer:
     build:
       context: .
@@ -162,6 +163,29 @@ services:
       - ./raw_tweets.csv:/app/raw_tweets.csv
     depends_on:
       kafka:
+        condition: service_healthy
+    networks:
+      - kafka-network
+
+  # ========== Final Worker Consumer (Clean Arch) ==========
+  worker-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: worker-consumer
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin123}
+      - POSTGRES_DB=${POSTGRES_DB:-tweets_db}
+    volumes:
+      - ./output:/app/output
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     networks:
       - kafka-network
