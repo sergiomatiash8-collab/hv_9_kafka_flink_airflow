@@ -1,31 +1,48 @@
-# Використовуємо легкий образ
+# ==================== BASE IMAGE ====================
 FROM python:3.10-slim
 
-# Встановлюємо робочу директорію
+# ==================== METADATA ====================
+LABEL maintainer="Data Engineering Team"
+LABEL description="Worker Consumer для обробки збагачених твітів"
+
+# ==================== WORK DIRECTORY ====================
 WORKDIR /app
 
-# Встановлюємо системні залежності для psycopg2 (якщо використовуємо не binary)
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# ==================== DEPENDENCIES ====================
 
-# Копіюємо файл залежностей (якщо є) або ставимо напряму
-# Для чистоти архітектури краще мати requirements.txt, але пропишемо так:
-RUN pip install --no-cache-dir \
-    kafka-python \
-    psycopg2-binary \
-    pydantic \
-    pydantic-settings \
-    python-dotenv
+# Копіювання requirements
+COPY requirements.txt /app/requirements.txt
 
-# Копіюємо весь вихідний код
-# Завдяки .dockerignore (якщо він є), ми не скопіюємо venv та логи
+# Встановлення Python залежностей
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ==================== APPLICATION CODE ====================
+
+# Копіювання всього src директорії (Clean Architecture)
 COPY src/ /app/src/
-COPY .env /app/.env
 
-# Додаємо шлях до системних шляхів Python, щоб працювали імпорти з src
+# Копіювання .env якщо є
+COPY .env /app/.env 2>/dev/null || true
+
+# Створення output директорії для CSV
+RUN mkdir -p /app/output && chmod 777 /app/output
+
+# ==================== ENVIRONMENT ====================
+
+# Додавання /app до PYTHONPATH для коректних імпортів
 ENV PYTHONPATH=/app
 
-# Команда запуску нашого presentation layer
-CMD ["python", "src/presentation/consumers/worker.py"]
+# Налаштування буферизації Python (для логів в реальному часі)
+ENV PYTHONUNBUFFERED=1
+
+# ==================== HEALTHCHECK ====================
+
+# Перевірка здоров'я контейнера
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD ps aux | grep -q "[p]ython" || exit 1
+
+# ==================== ENTRYPOINT ====================
+
+# Запуск Worker Consumer
+CMD ["python", "src/presentation/worker_launcher.py"]
