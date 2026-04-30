@@ -19,30 +19,28 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # ==================== APPLICATION CODE ====================
 
-# Copy entire src directory (maintaining Clean Architecture structure)
+# Copy entire src directory
 COPY src/ /app/src/
 
-# Copy .env if it exists (fails silently if missing)
-COPY .env /app/.env 2>/dev/null || true
+# Fixed: Direct copy of .env file
+COPY .env /app/.env
 
 # Create output directory for CSV storage
 RUN mkdir -p /app/output && chmod 777 /app/output
 
 # ==================== ENVIRONMENT ====================
 
-# Add /app to PYTHONPATH to ensure internal module imports work correctly
+# Ensure internal module imports work correctly
 ENV PYTHONPATH=/app
 
-# Disable Python output buffering for real-time log monitoring
+# Disable Python output buffering
 ENV PYTHONUNBUFFERED=1
 
 # ==================== HEALTHCHECK ====================
 
-# Container health check: verifies the Python process is still running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD ps aux | grep -q "[p]ython" || exit 1
 
 # ==================== ENTRYPOINT ====================
 
-# Launch the Worker Consumer application
 CMD ["python", "src/presentation/worker_launcher.py"]

@@ -202,4 +202,4 @@ class ConsumeEnrichedTweetsUseCase:
     def _cleanup(self) -> None:
         """Resource cleanup."""
         logger.info("Cleaning up resources...")
-        # Close connections / flush buffers if needed
+        # Close connections 

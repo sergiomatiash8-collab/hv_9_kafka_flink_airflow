@@ -1,20 +1,16 @@
-# Use a lightweight Python base image
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# 1. Install dependencies (using your existing library stack)
-RUN pip install --no-cache-dir \
-    kafka-python \
-    pandas \
-    python-dotenv
+# Install dependencies
+RUN pip install --no-cache-dir kafka-python pandas python-dotenv
 
-# 2. Copy the ENTIRE source code (src) to ensure all internal imports work
+# Copy source code, data, and config
 COPY src/ /app/src/
+COPY data/ /app/data/
 COPY .env /app/.env
 
-# 3. Add the working directory to PYTHONPATH so Python recognizes the 'src' module
+# Set PYTHONPATH
 ENV PYTHONPATH=/app
 
-# 4. Launch the application via the producer launcher
 CMD ["python", "src/presentation/producer_launcher.py"]

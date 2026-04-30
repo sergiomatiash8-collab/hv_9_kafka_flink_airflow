@@ -3,8 +3,9 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# Data processing
-pandas==2.1.0
+# Data processing (Downgraded to resolve Flink/Numpy conflict)
+numpy>=1.21.4,<1.22.0
+pandas==1.5.3
 
 # Kafka
 kafka-python-ng==2.2.2
