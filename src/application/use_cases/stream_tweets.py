@@ -9,16 +9,16 @@ logger = logging.getLogger(__name__)
 
 class TweetReader(Protocol):
     """
-    Вхідний порт (Input Port).
-    Нам байдуже, звідки прийдуть твіти (CSV, API чи DB).
+    Input port.
+    It does not matter where tweets come from (CSV, API or DB).
     """
     def read_tweets(self) -> List[Tweet]:
         ...
 
 class StreamTweetsUseCase:
     """
-    Use Case: Потік твітів від джерела до брокера повідомлень.
-    Реалізує логіку: Зчитати -> (Опціонально) Збагатити -> Відправити.
+    Use Case: Stream tweets from a source to a message broker.
+    Implements logic: Read -> (Optional) Enrich -> Send.
     """
 
     def __init__(
@@ -33,24 +33,24 @@ class StreamTweetsUseCase:
 
     def execute(self, enrich: bool = False) -> Dict[str, Any]:
         """
-        Головний метод виконання сценарію.
+        Main execution method.
         """
-        logger.info("Запуск стрімінгу твітів...")
-        
+        logger.info("Starting tweet streaming...")
+
         try:
-            # 1. Зчитування (через абстрактний рідер)
+            # 1. Read (via abstract reader)
             tweets = self._reader.read_tweets()
             count = len(tweets)
-            logger.info(f"Зчитано {count} твітів")
+            logger.info(f"Read {count} tweets")
 
-            # 2. Збагачення (якщо потрібно)
+            # 2. Enrichment (optional)
             if enrich and self._enrichment_service:
                 tweets = self._enrichment_service.batch_enrich(tweets)
-                logger.info("Твіти збагачено бізнес-логікою")
+                logger.info("Tweets enriched with business logic")
 
-            # 3. Відправка в Kafka (через інтерфейс продюсера)
+            # 3. Send to Kafka (via producer interface)
             self._producer.send_batch(tweets)
-            logger.info(f"Успішно відправлено {count} повідомлень")
+            logger.info(f"Successfully sent {count} messages")
 
             return {
                 "status": "success",
@@ -59,7 +59,7 @@ class StreamTweetsUseCase:
             }
 
         except Exception as e:
-            logger.error(f"Помилка під час стрімінгу: {e}", exc_info=True)
+            logger.error(f"Streaming error: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": str(e)

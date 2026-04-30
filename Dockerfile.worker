@@ -3,46 +3,46 @@ FROM python:3.10-slim
 
 # ==================== METADATA ====================
 LABEL maintainer="Data Engineering Team"
-LABEL description="Worker Consumer для обробки збагачених твітів"
+LABEL description="Worker Consumer for processing enriched tweets"
 
 # ==================== WORK DIRECTORY ====================
 WORKDIR /app
 
 # ==================== DEPENDENCIES ====================
 
-# Копіювання requirements
+# Copy requirements file
 COPY requirements.txt /app/requirements.txt
 
-# Встановлення Python залежностей
+# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # ==================== APPLICATION CODE ====================
 
-# Копіювання всього src директорії (Clean Architecture)
+# Copy entire src directory (maintaining Clean Architecture structure)
 COPY src/ /app/src/
 
-# Копіювання .env якщо є
+# Copy .env if it exists (fails silently if missing)
 COPY .env /app/.env 2>/dev/null || true
 
-# Створення output директорії для CSV
+# Create output directory for CSV storage
 RUN mkdir -p /app/output && chmod 777 /app/output
 
 # ==================== ENVIRONMENT ====================
 
-# Додавання /app до PYTHONPATH для коректних імпортів
+# Add /app to PYTHONPATH to ensure internal module imports work correctly
 ENV PYTHONPATH=/app
 
-# Налаштування буферизації Python (для логів в реальному часі)
+# Disable Python output buffering for real-time log monitoring
 ENV PYTHONUNBUFFERED=1
 
 # ==================== HEALTHCHECK ====================
 
-# Перевірка здоров'я контейнера
+# Container health check: verifies the Python process is still running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD ps aux | grep -q "[p]ython" || exit 1
 
 # ==================== ENTRYPOINT ====================
 
-# Запуск Worker Consumer
+# Launch the Worker Consumer application
 CMD ["python", "src/presentation/worker_launcher.py"]

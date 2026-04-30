@@ -8,7 +8,7 @@ from src.domain.value_objects.priority import Priority
 class TestTweetEntity(unittest.TestCase):
 
     def test_tweet_creation_success(self):
-        """Перевіряємо, що валідний твіт створюється без помилок."""
+        """Verify that a valid tweet is created without errors."""
         author = AuthorId("123")
         text = "Valid tweet text"
         tweet = Tweet(
@@ -22,18 +22,18 @@ class TestTweetEntity(unittest.TestCase):
         self.assertEqual(tweet.author_id.value, "123")
 
     def test_tweet_empty_text_raises_error(self):
-        """Перевіряємо, чи спрацює валідація на порожній текст."""
+        """Verify that validation triggers for empty text."""
         with self.assertRaises(ValueError) as context:
             Tweet(
                 author_id=AuthorId("123"),
                 created_at=datetime.now(),
-                text="",  # ПОМИЛКА ТУТ
+                text="",  # ERROR HERE
                 company=Company.OTHER
             )
-        self.assertIn("Текст твіта не може бути порожнім", str(context.exception))
+        self.assertIn("Tweet text cannot be empty", str(context.exception))
 
     def test_tweet_too_long_raises_error(self):
-        """Перевіряємо ліміт у 280 символів."""
+        """Verify the 280 character limit."""
         long_text = "a" * 281
         with self.assertRaises(ValueError) as context:
             Tweet(
@@ -41,7 +41,7 @@ class TestTweetEntity(unittest.TestCase):
                 created_at=datetime.now(),
                 text=long_text
             )
-        self.assertIn("перевищує ліміт 280 символів", str(context.exception))
+        self.assertIn("exceeds the 280 character limit", str(context.exception))
 
 if __name__ == "__main__":
     unittest.main()

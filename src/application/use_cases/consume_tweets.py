@@ -1,13 +1,13 @@
 """
-Use Case для споживання збагачених твітів з Kafka.
+Use Case for consuming enriched tweets from Kafka.
 
-Відповідальності:
-    1. Читання збагачених даних з топіку 'tweets_enriched'
-    2. Валідація та перетворення у Domain Entity
-    3. Збереження в PostgreSQL
-    4. Збереження в CSV файли (по хвилинах)
+Responsibilities:
+    1. Read enriched data from 'tweets_enriched' topic
+    2. Validate and map to Domain Entity
+    3. Save to PostgreSQL
+    4. Save to CSV files (by minute)
 
-Clean Architecture шар: Application Layer
+Clean Architecture layer: Application Layer
 """
 
 import logging
@@ -25,190 +25,181 @@ logger = logging.getLogger(__name__)
 
 class ConsumeEnrichedTweetsUseCase:
     """
-    Use Case для споживання ЗБАГАЧЕНИХ твітів.
-    
-    Архітектура потоку:
+    Use Case for consuming enriched tweets.
+
+    Data flow architecture:
         Kafka (tweets_enriched) → Consumer → [PostgreSQL + CSV]
     """
-    
+
     def __init__(self):
         """
-        Ініціалізація залежностей.
-        
-        Dependency Injection через конструктор (можна додати DI контейнер).
+        Dependency initialization.
+
+        Constructor-based dependency injection (DI container can be added later).
         """
-        # ✅ ВИПРАВЛЕНО: правильний топік
+        # Correct topic
         self.kafka_reader = KafkaInfrastructureConsumer(topic="tweets_enriched")
         self.db_repo = PostgresTweetRepository()
         self.csv_repo = CSVTweetRepository()
-        
-        # Метрики для моніторингу
+
+        # Metrics for monitoring
         self.processed_count = 0
         self.error_count = 0
         self.start_time = datetime.now()
-        
+
         logger.info("=" * 70)
-        logger.info("🚀 ENRICHED TWEETS CONSUMER - INITIALIZED")
+        logger.info("ENRICHED TWEETS CONSUMER INITIALIZED")
         logger.info("=" * 70)
-        logger.info(f"📥 Reading from topic: tweets_enriched")
-        logger.info(f"💾 Saving to: PostgreSQL + CSV files")
+        logger.info("Reading from topic: tweets_enriched")
+        logger.info("Saving to: PostgreSQL + CSV files")
         logger.info("=" * 70)
 
     def execute(self):
         """
-        Головний цикл обробки збагачених твітів.
-        
-        Працює безкінечно (blocking) до отримання SIGINT.
+        Main processing loop for enriched tweets.
+
+        Runs indefinitely (blocking) until SIGINT.
         """
-        logger.info("🔄 Початок споживання повідомлень...")
-        
+        logger.info("Starting message consumption loop...")
+
         try:
             for raw_data in self.kafka_reader.consume():
                 self._process_message(raw_data)
-                
+
         except KeyboardInterrupt:
-            logger.info("⚠️  Отримано сигнал зупинки (CTRL+C)")
+            logger.info("Stop signal received (CTRL+C)")
             self._log_statistics()
         except Exception as e:
-            logger.error(f"💥 Критична помилка в Consumer: {e}", exc_info=True)
+            logger.error(f"Critical Consumer error: {e}", exc_info=True)
             raise
         finally:
             self._cleanup()
-    
+
     def _process_message(self, raw_data: dict) -> None:
         """
-        Обробка одного повідомлення з Kafka.
-        
+        Process a single Kafka message.
+
         Args:
-            raw_data: Словник з даними з Kafka
+            raw_data: Dictionary from Kafka
         """
         try:
-            # 1. Валідація обов'язкових полів
+            # 1. Validate required fields
             if not self._validate_message(raw_data):
                 return
-            
-            # 2. Перетворення у Domain Entity
+
+            # 2. Map to Domain Entity
             tweet = self._map_to_entity(raw_data)
             if not tweet:
                 return
-            
-            # 3. Збереження в PostgreSQL
+
+            # 3. Save to PostgreSQL
             self.db_repo.save(tweet)
-            
-            # 4. Збереження в CSV
+
+            # 4. Save to CSV
             self.csv_repo.save(tweet)
-            
-            # 5. Оновлення метрик
+
+            # 5. Update metrics
             self.processed_count += 1
-            
-            # Логування кожні 100 повідомлень
+
+            # Log every 100 messages
             if self.processed_count % 100 == 0:
                 self._log_progress()
-            
+
         except Exception as e:
             self.error_count += 1
-            logger.error(f"❌ Помилка обробки повідомлення: {e}")
-            logger.debug(f"Дані: {raw_data}")
-    
+            logger.error(f"Message processing error: {e}")
+            logger.debug(f"Raw data: {raw_data}")
+
     def _validate_message(self, data: dict) -> bool:
         """
-        Валідація структури повідомлення.
-        
+        Validate message structure.
+
         Args:
-            data: Дані з Kafka
-            
+            data: Kafka message data
+
         Returns:
-            True якщо повідомлення валідне, False інакше
+            True if valid, False otherwise
         """
         required_fields = ['author_id', 'created_at', 'text']
-        
+
         for field in required_fields:
             if field not in data or not data[field]:
-                logger.warning(f"⚠️  Пропущено повідомлення: відсутнє поле '{field}'")
+                logger.warning(f"Skipping message: missing field '{field}'")
                 return False
-        
+
         return True
-    
+
     def _map_to_entity(self, data: dict) -> Optional[Tweet]:
         """
-        Маппінг RAW даних у Domain Entity.
-        
+        Map raw data to Domain Entity.
+
         Args:
-            data: Словник з Kafka
-            
+            data: Kafka dictionary
+
         Returns:
-            Tweet entity або None у разі помилки
+            Tweet entity or None on error
         """
         try:
-            # Парсинг дати (підтримка різних форматів)
             created_at = self._parse_datetime(data['created_at'])
-            
-            # Створення Tweet Entity
+
             tweet = Tweet(
                 author_id=AuthorId(data['author_id']),
                 created_at=created_at,
                 text=data['text'],
-                
-                # ✅ Збагачені поля з Flink
+
+                # Enriched fields from Flink
                 company=Company(data['company']) if data.get('company') else None,
                 priority=Priority(data['priority']) if data.get('priority') else None
             )
-            
+
             return tweet
-            
+
         except Exception as e:
-            logger.error(f"❌ Помилка маппінгу даних в Entity: {e}")
+            logger.error(f"Entity mapping error: {e}")
             return None
-    
+
     def _parse_datetime(self, date_str: str) -> datetime:
         """
-        Парсинг дати з підтримкою різних форматів.
-        
-        Args:
-            date_str: Рядок з датою
-            
-        Returns:
-            datetime об'єкт
+        Parse datetime with multiple format support.
         """
         formats = [
             '%Y-%m-%dT%H:%M:%S',
             '%Y-%m-%d %H:%M:%S',
             '%Y-%m-%dT%H:%M:%S.%f',
         ]
-        
+
         for fmt in formats:
             try:
                 return datetime.strptime(date_str, fmt)
             except ValueError:
                 continue
-        
-        # Fallback на ISO format
+
         return datetime.fromisoformat(date_str)
-    
+
     def _log_progress(self) -> None:
-        """Логування прогресу обробки."""
+        """Log processing progress."""
         elapsed = (datetime.now() - self.start_time).total_seconds()
         rate = self.processed_count / elapsed if elapsed > 0 else 0
-        
+
         logger.info(
-            f"📊 Прогрес: {self.processed_count} оброблено "
-            f"({rate:.2f} msg/sec), помилок: {self.error_count}"
+            f"Progress: {self.processed_count} processed "
+            f"({rate:.2f} msg/sec), errors: {self.error_count}"
         )
-    
+
     def _log_statistics(self) -> None:
-        """Логування фінальної статистики."""
+        """Log final statistics."""
         elapsed = (datetime.now() - self.start_time).total_seconds()
-        
+
         logger.info("=" * 70)
-        logger.info("📊 ФІНАЛЬНА СТАТИСТИКА")
+        logger.info("FINAL STATISTICS")
         logger.info("=" * 70)
-        logger.info(f"✅ Успішно оброблено: {self.processed_count}")
-        logger.info(f"❌ Помилок: {self.error_count}")
-        logger.info(f"⏱️  Час роботи: {elapsed:.2f} секунд")
-        logger.info(f"⚡ Середня швидкість: {self.processed_count/elapsed:.2f} msg/sec")
+        logger.info(f"Processed: {self.processed_count}")
+        logger.info(f"Errors: {self.error_count}")
+        logger.info(f"Runtime: {elapsed:.2f} seconds")
+        logger.info(f"Avg speed: {self.processed_count/elapsed:.2f} msg/sec")
         logger.info("=" * 70)
-    
+
     def _cleanup(self) -> None:
-        """Очищення ресурсів."""
-        logger.info("🧹 Очищення ресурсів...")
-        # Тут можна додати закриття з'єднань, flush буферів і т.д.
+        """Resource cleanup."""
+        logger.info("Cleaning up resources...")
+        # Close connections / flush buffers if needed

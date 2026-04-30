@@ -16,7 +16,7 @@ with DAG(
     catchup=False,
 ) as dag:
 
-    # Шукаємо контейнер jobmanager і запускаємо в ньому наш пітонівський скрипт
+    # Find the JobManager container and run the Python script inside it
     run_flink_job = BashOperator(
         task_id='run_tweet_processor',
         bash_command="""

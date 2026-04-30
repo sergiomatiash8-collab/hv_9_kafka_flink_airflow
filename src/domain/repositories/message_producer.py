@@ -6,27 +6,27 @@ T = TypeVar('T')
 
 class MessageProducer(ABC, Generic[T]):
     """
-    Абстрактний інтерфейс (Port) для відправки повідомлень.
-    
-    Це "роз'єм", у який ми пізніше вставимо Kafka, RabbitMQ 
-    або навіть простий логгер для тестів.
+    Abstract interface (Port) for sending messages.
+
+    This is a "socket" that can later be implemented by Kafka, RabbitMQ,
+    or even a simple logger for testing.
     """
 
     @abstractmethod
     def send(self, message: T) -> None:
-        """Відправити одне повідомлення."""
+        """Send a single message."""
         pass
 
     @abstractmethod
     def send_batch(self, messages: List[T]) -> None:
-        """Відправити список повідомлень (bulk/batch)."""
+        """Send a list of messages (bulk/batch)."""
         pass
 
     @abstractmethod
     def close(self) -> None:
-        """Закрити з'єднання та очистити ресурси."""
+        """Close connection and release resources."""
         pass
 
 class TweetProducer(MessageProducer[Tweet]):
-    """Спеціалізований інтерфейс для роботи саме з сутністю Tweet."""
+    """Specialized interface for working specifically with Tweet entity."""
     pass

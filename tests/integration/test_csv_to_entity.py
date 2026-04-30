@@ -6,30 +6,30 @@ from src.infrastructure.config.settings import settings
 class TestCsvToEntityIntegration(unittest.TestCase):
     def test_reader_converts_real_data(self):
         """
-        Перевіряємо реальний ланцюг: 
-        Зчитування файлу через CSVTweetReader -> Створення об'єкта Tweet.
+        Verify the real chain: 
+        Reading file via CSVTweetReader -> Creating a Tweet object.
         """
-        # Використовуємо реальний рідер замість абстрактного продюсера
+        # Using the real reader instead of an abstract producer
         reader = CSVTweetReader(settings.csv_file_path)
         
-        # Отримуємо список твітів
+        # Get the list of tweets
         tweets = reader.read_tweets()
         
         if not tweets:
-            self.fail(f"CSV файл за шляхом {settings.csv_file_path} порожній або не знайдений!")
+            self.fail(f"CSV file at path {settings.csv_file_path} is empty or not found!")
             
         first_tweet = tweets[0]
         
-        # Перевіряємо, що на виході саме об'єкт нашого класу Tweet
+        # Check that the output is specifically an instance of our Tweet class
         self.assertIsInstance(first_tweet, Tweet)
         
-        # Перевіряємо, що дані всередині валідні
+        # Verify that the internal data is valid
         self.assertIsNotNone(first_tweet.author_id.value)
         self.assertIsNotNone(first_tweet.text)
         self.assertIsNotNone(first_tweet.created_at)
         
-        # Додаткова крута перевірка: чи визначилась компанія
-        # (в Kaggle на початку файлу зазвичай Apple/Uber)
+        # Additional check: verify if the company was identified
+        # (Kaggle datasets usually start with companies like Apple or Uber)
         self.assertIsNotNone(first_tweet.company)
 
 if __name__ == "__main__":

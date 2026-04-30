@@ -1,10 +1,10 @@
-# Базовий образ Flink з підтримкою Java 11
+# Base Flink image with Java 11 support
 FROM flink:1.17.1-scala_2.12-java11
 
-# Перемикаємося на root для системних налаштувань
+# Switch to root for system configuration
 USER root
 
-# 1. Оновлення репозиторіїв та встановлення системних пакетів
+# 1. Update repositories and install system packages
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
@@ -12,27 +12,27 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Створюємо симлінк, щоб команда "python" вказувала на "python3"
+# Create a symlink so "python" points to "python3"
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# 2. Встановлення PyFlink та залежностей з екстремальними тайм-аутами
+# 2. Install PyFlink and dependencies with high timeouts and retries
 RUN pip3 install --no-cache-dir --default-timeout=1000 --retries 50 \
     apache-flink==1.17.1 \
     kafka-python \
     psycopg2-binary \
     python-dotenv
 
-# 3. Завантаження конекторів (Kafka, JDBC та PostgreSQL JDBC Driver)
-# Ми додаємо flink-connector-jdbc, щоб Flink розумів тип таблиць 'jdbc'
+# 3. Download connectors (Kafka, JDBC, and PostgreSQL JDBC Driver)
+# Including flink-connector-jdbc allows Flink to handle 'jdbc' table types
 RUN wget -q https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/1.17.1/flink-sql-connector-kafka-1.17.1.jar -P /opt/flink/lib/ && \
     wget -q https://repo1.maven.org/maven2/org/apache/flink/flink-connector-jdbc/3.1.0-1.17/flink-connector-jdbc-3.1.0-1.17.jar -P /opt/flink/lib/ && \
     wget -q https://jdbc.postgresql.org/download/postgresql-42.6.0.jar -P /opt/flink/lib/
 
-# 4. Налаштування прав доступу
+# 4. Configure permissions
 RUN mkdir -p /opt/flink/usrlib/output && \
     chmod -R 777 /opt/flink/usrlib/output && \
     chown -R flink:flink /opt/flink/usrlib
 
-# Повертаємося до стандартного користувача flink
+# Switch back to the standard flink user
 USER flink
 WORKDIR /opt/flink

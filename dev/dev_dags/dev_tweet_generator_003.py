@@ -13,11 +13,11 @@ default_args = {
 with DAG(
     'kafka_tweet_generator',
     default_args=default_args,
-    schedule_interval=timedelta(seconds=10),  # Кожні 10 секунд
+    schedule_interval=timedelta(seconds=10),  # Every 10 seconds
     catchup=False
 ) as dag:
 
-    # Генеруємо рандомний твіт і штовхаємо в Kafka
+    # Generate a random tweet and push it to Kafka
     generate_tweet = BashOperator(
         task_id='send_tweet_to_kafka',
         bash_command="""

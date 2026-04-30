@@ -6,7 +6,7 @@ pydantic-settings==2.1.0
 # Data processing
 pandas==2.1.0
 
-# Kafka (ВАЖЛИВО: використовуємо стабільний форк для нових версій Python)
+# Kafka
 kafka-python-ng==2.2.2
 
 # Flink
@@ -27,5 +27,5 @@ flake8==6.1.0
 mypy==1.7.1
 isort==5.13.0
 
-# Airflow (Для локальної розробки достатньо інтерфейсів)
+# Airflow 
 apache-airflow==2.7.0

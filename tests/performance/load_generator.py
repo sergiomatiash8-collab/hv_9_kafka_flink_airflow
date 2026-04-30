@@ -3,56 +3,56 @@ import time
 import random
 from kafka import KafkaProducer
 
-# Налаштування
+# Configuration
 TOPIC = 'tweets'
 BROKERS = ['localhost:9092']
 TOTAL_RECORDS = 100_000 
 
 def run_load_test():
-    # Оптимізований продюсер для високого навантаження
+    # Optimized producer for high load
     producer = KafkaProducer(
         bootstrap_servers=BROKERS,
         value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-        # Групуємо повідомлення по 64КБ або чекаємо 50мс перед відправкою пачки
+        # Group messages by 64KB or wait 50ms before sending a batch
         batch_size=65536,
         linger_ms=50,
-        compression_type='gzip' # Стиснення економить трафік при великих обсягах
+        compression_type='gzip' # Compression saves bandwidth for large volumes
     )
 
-    print(f"🚀 Запуск Load Test: {TOTAL_RECORDS} повідомлень...")
-    print(f"📡 Топік: {TOPIC} | Брокери: {BROKERS}")
+    print(f"Starting Load Test: {TOTAL_RECORDS} messages...")
+    print(f"Topic: {TOPIC} | Brokers: {BROKERS}")
     
     start_time = time.time()
 
     try:
         for i in range(1, TOTAL_RECORDS + 1):
-            # ВАЖЛИВО: Назви полів мають точно збігатися з CREATE TABLE у Flink
+            # IMPORTANT: Field names must exactly match the CREATE TABLE in Flink
             tweet = {
-                "author_id": i,  # Виправлено з 'id' на 'author_id'
+                "author_id": i,  
                 "text": f"Performance test tweet #{i} | Generate load for Flink & Postgres #{random.randint(100, 999)}",
-                "created_at": time.strftime('%Y-%m-%d %H:%M:%S'), # Формат, який легше перетравить БД
+                "created_at": time.strftime('%Y-%m-%d %H:%M:%S'), # Format easily digestible by the DB
                 "user_name": f"bot_tester_{random.randint(1, 500)}"
             }
             
             producer.send(TOPIC, tweet)
 
             if i % 20000 == 0:
-                print(f"📈 Прогрес: {i} відправлено...")
+                print(f"Progress: {i} sent...")
 
-        print("⏳ Завершуємо передачу залишків (flushing)...")
+        print("Finalizing transmission (flushing)...")
         producer.flush()
         
         end_time = time.time()
         duration = end_time - start_time
         
         print("\n" + "="*30)
-        print(f"🏁 ТЕСТ ЗАВЕРШЕНО")
-        print(f"⏱ Час виконання: {duration:.2f} сек")
-        print(f"📊 Швидкість: {int(TOTAL_RECORDS / duration)} msg/sec")
+        print("TEST COMPLETED")
+        print(f"Execution time: {duration:.2f} sec")
+        print(f"Throughput: {int(TOTAL_RECORDS / duration)} msg/sec")
         print("="*30)
 
     except Exception as e:
-        print(f"❌ Помилка під час генерації: {e}")
+        print(f"Error during generation: {e}")
     finally:
         producer.close()
 

@@ -1,37 +1,36 @@
--- 1. Очищення (опціонально, корисно для тестів, якщо хочеш починати з чистого листа)
+-- 1. Cleanup (Optional: useful for resetting the environment during testing)
 -- DROP VIEW IF EXISTS company_stats;
 -- DROP TABLE IF EXISTS tweets_enriched;
 
--- 2. Створення основної таблиці
+-- 2. Main Table Creation
 CREATE TABLE IF NOT EXISTS tweets_enriched (
     id SERIAL PRIMARY KEY,
     author_id VARCHAR(100) NOT NULL,
     
-    -- Використовуємо TIMESTAMP WITH TIME ZONE для коректної роботи з датами з різних джерел
+    -- Using TIMESTAMP WITH TIME ZONE to handle cross-region data sources correctly
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     
-    -- Поле 'text' замість 'tweet_text' для повної відповідності класу Tweet
+    -- Field 'text' aligns perfectly with the Tweet entity class
     text TEXT NOT NULL,
     
     text_length INT,
     company VARCHAR(50),
     priority VARCHAR(20),
     
-    -- Час, коли запис потрапив у базу (корисно для моніторингу затримок/latency)
+    -- Metadata field to track database ingestion time (useful for latency monitoring)
     processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
-    -- Констрейнт для запобігання дублікатів (Idempotency)
-    -- Якщо один і той самий твіт прийде двічі, база не створить дублікат
+    -- Idempotency constraint: prevents duplicate entries if the pipeline retries an event
     CONSTRAINT unique_tweet UNIQUE(author_id, created_at)
 );
 
--- 3. Створення індексів (фундамент для Performance тестування)
+-- 3. Index Creation (Foundation for performance testing and fast lookups)
 CREATE INDEX IF NOT EXISTS idx_company ON tweets_enriched(company);
 CREATE INDEX IF NOT EXISTS idx_priority ON tweets_enriched(priority);
 CREATE INDEX IF NOT EXISTS idx_created_at ON tweets_enriched(created_at);
 CREATE INDEX IF NOT EXISTS idx_processed_at ON tweets_enriched(processed_at);
 
--- 4. Оновлена View для статистики (тепер працює з полем 'text')
+-- 4. Analytical View for Real-time Statistics
 CREATE OR REPLACE VIEW company_stats AS
 SELECT 
     company,
@@ -41,5 +40,5 @@ SELECT
 FROM tweets_enriched
 GROUP BY company;
 
--- 5. Додаємо коментар для документації схеми
-COMMENT ON TABLE tweets_enriched IS 'Збагачені твіти, оброблені через Kafka та Flink Pipeline';
+-- 5. Schema Documentation
+COMMENT ON TABLE tweets_enriched IS 'Enriched tweets processed via the Kafka and Flink Pipeline';

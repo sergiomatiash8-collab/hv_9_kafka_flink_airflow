@@ -1,13 +1,14 @@
 """
-Worker Launcher - точка входу для Consumer контейнера.
+Worker Launcher - Entry point for the Consumer container.
 
-Запускає Use Case для споживання збагачених твітів.
+Starts the Use Case for consuming enriched tweets.
 """
 
 import logging
 import sys
 from src.application.use_cases.consume_tweets import ConsumeEnrichedTweetsUseCase
 
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -15,21 +16,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def main():
-    """Головна функція запуску Worker."""
+    """Main function to launch the Worker."""
     logger.info("=" * 70)
-    logger.info("🎬 WORKER CONSUMER LAUNCHER - STARTING")
+    logger.info("WORKER CONSUMER LAUNCHER - STARTING")
     logger.info("=" * 70)
     
     try:
-        # Ініціалізація та запуск Use Case
+        # Initialize and execute Use Case
         use_case = ConsumeEnrichedTweetsUseCase()
         use_case.execute()
         
     except KeyboardInterrupt:
-        logger.info("⚠️  Отримано сигнал зупинки")
+        logger.info("Stop signal received")
         sys.exit(0)
     except Exception as e:
-        logger.error(f"💥 Критична помилка: {e}", exc_info=True)
+        logger.error(f"Critical error: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":

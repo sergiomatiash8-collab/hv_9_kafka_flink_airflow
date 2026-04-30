@@ -5,27 +5,27 @@ from ..value_objects.priority import Priority
 
 class EnrichmentService:
     """
-    Domain Service для оркестрації логіки збагачення.
-    
-    Відповідає за координацію між різними Value Objects 
-    та сутністю Tweet.
+    Domain service for orchestrating enrichment logic.
+
+    Responsible for coordinating different Value Objects
+    and the Tweet entity.
     """
 
     def enrich_tweet(self, tweet: Tweet) -> Tweet:
         """
-        Виконує повний цикл бізнес-збагачення одного твіта.
+        Executes full business enrichment cycle for a single tweet.
         """
-        # 1. Визначаємо компанію на основі ID автора
+        # 1. Determine company based on author ID
         company = Company.from_author_id(tweet.author_id.value)
-        
-        # 2. Визначаємо пріоритет на основі тексту
+
+        # 2. Determine priority based on text content
         priority = Priority.from_text(tweet.text)
-        
-        # 3. Повертаємо новий екземпляр збагаченого твіта
+
+        # 3. Return new enriched tweet instance
         return tweet.enrich(company, priority)
 
     def batch_enrich(self, tweets: List[Tweet]) -> List[Tweet]:
         """
-        Пакетне збагачення (для обробки масивів даних).
+        Batch enrichment (for processing multiple records).
         """
         return [self.enrich_tweet(t) for t in tweets]

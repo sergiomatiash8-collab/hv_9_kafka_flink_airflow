@@ -1,13 +1,11 @@
 import os
 from pyflink.table import EnvironmentSettings, TableEnvironment
 
-# 1. Створюємо середовище
+# 1. Create environment
 settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
 t_env = TableEnvironment.create(settings)
 
-# --- ПУНКТ 2 ВИДАЛЕНО: JAR-ФАЙЛИ ПІДТЯГУЮТЬСЯ АВТОМАТИЧНО З /opt/flink/lib/ ---
-
-# 2. Джерело даних (Kafka)
+# 2. Data source (Kafka)
 t_env.execute_sql("""
     CREATE TABLE tweets_source (
         author_id STRING,
@@ -23,7 +21,7 @@ t_env.execute_sql("""
     )
 """)
 
-# 3. Вивід результату (Консоль TaskManager)
+# 3. Output result (TaskManager console)
 t_env.execute_sql("""
     CREATE TABLE tweets_enriched (
         author_id STRING,
@@ -35,14 +33,14 @@ t_env.execute_sql("""
     )
 """)
 
-# 4. Запуск обробки
-print("🚀 Надсилаємо джобу у кластер Flink (Local JAR mode)...")
+# 4. Start processing
+print("Submitting job to Flink cluster (Local JAR mode)...")
 table_result = t_env.execute_sql("""
     INSERT INTO tweets_enriched
-    SELECT 
-        author_id, 
-        `text`, 
-        CURRENT_TIMESTAMP, 
+    SELECT
+        author_id,
+        `text`,
+        CURRENT_TIMESTAMP,
         'PROCESSED_BY_FLINK_V1' as enrichment_info
     FROM tweets_source
 """)

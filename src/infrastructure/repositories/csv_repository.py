@@ -1,15 +1,3 @@
-"""
-Repository для збереження твітів у CSV файли.
-
-Правила:
-    - Формат назви: tweets_dd_mm_yyyy_hh_mm.csv
-    - Розподіл: по хвилинах (кожна хвилина = новий файл)
-    - Encoding: UTF-8
-    - Headers: автоматично додаються для нових файлів
-
-Clean Architecture шар: Infrastructure Layer
-"""
-
 import csv
 import os
 from datetime import datetime
@@ -20,79 +8,77 @@ logger = logging.getLogger(__name__)
 
 class CSVTweetRepository:
     """
-    Repository для збереження Tweet entities у CSV формат.
-    
-    Відповідає за:
-        - Форматування назв файлів
-        - Створення директорій
-        - Append дані до існуючих файлів
-        - Запис заголовків для нових файлів
+    Repository for saving Tweet entities into CSV files.
+
+    Rules:
+        - Filename format: tweets_dd_mm_yyyy_hh_mm.csv
+        - Partitioning: by minute (each minute = new file)
+        - Encoding: UTF-8
+        - Headers: automatically added for new files
+
+    Infrastructure layer component.
     """
-    
+
     def __init__(self, base_path: str = "output"):
         """
-        Ініціалізація repository.
-        
+        Initialize repository.
+
         Args:
-            base_path: Базова директорія для збереження CSV файлів
+            base_path: Base directory for CSV storage
         """
         self.base_path = base_path
         self._ensure_directory_exists()
-        logger.info(f"📁 CSV Repository ініціалізовано: {os.path.abspath(base_path)}")
-    
+        logger.info(f"CSV Repository initialized: {os.path.abspath(base_path)}")
+
     def _ensure_directory_exists(self) -> None:
-        """Створення директорії якщо не існує."""
+        """Create directory if it does not exist."""
         os.makedirs(self.base_path, exist_ok=True)
-    
+
     def save(self, tweet: Tweet) -> None:
         """
-        Збереження твіту у CSV файл.
-        
+        Save tweet into CSV file.
+
         Args:
-            tweet: Domain Entity з даними твіту
-            
+            tweet: Tweet domain entity
+
         Raises:
-            Exception: у разі помилки запису
+            Exception: if write operation fails
         """
         filepath = self._get_current_filepath()
         file_exists = os.path.isfile(filepath)
-        
+
         try:
             with open(filepath, mode='a', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                
-                # Запис заголовків для нових файлів
+
+                # Write headers for new files
                 if not file_exists:
                     self._write_headers(writer)
-                    logger.info(f"📄 Створено новий файл: {os.path.basename(filepath)}")
-                
-                # Запис даних твіту
+                    logger.info(f"Created new file: {os.path.basename(filepath)}")
+
+                # Write tweet row
                 self._write_tweet_row(writer, tweet)
-                
+
         except Exception as e:
-            logger.error(f"❌ Помилка запису в CSV {filepath}: {e}")
+            logger.error(f"CSV write error {filepath}: {e}")
             raise
-    
+
     def _get_current_filepath(self) -> str:
         """
-        Формування шляху до поточного CSV файлу.
-        
+        Build current CSV file path.
+
         Returns:
-            Повний шлях до файлу у форматі: tweets_dd_mm_yyyy_hh_mm.csv
-            
-        Приклад:
-            tweets_27_10_2024_14_30.csv
+            Full path in format: tweets_dd_mm_yyyy_hh_mm.csv
         """
-        # ✅ ВИПРАВЛЕНО: правильний формат (день_місяць_рік_година_хвилина)
         filename = f"tweets_{datetime.now().strftime('%d_%m_%Y_%H_%M')}.csv"
         return os.path.join(self.base_path, filename)
-    
+
     def _write_headers(self, writer: csv.writer) -> None:
         """
-        Запис заголовків CSV файлу.
-        
+        Write CSV headers.
+
         Args:
-            writer: CSV writer об'єкт
+            writer: CSV writer instance
         """
         headers = [
             'author_id',
@@ -104,58 +90,58 @@ class CSVTweetRepository:
             'processed_at'
         ]
         writer.writerow(headers)
-    
+
     def _write_tweet_row(self, writer: csv.writer, tweet: Tweet) -> None:
         """
-        Запис даних твіту у CSV.
-        
+        Write tweet data row.
+
         Args:
-            writer: CSV writer об'єкт
+            writer: CSV writer instance
             tweet: Tweet entity
         """
-        # Безпечна екстракція значень з Value Objects
         author_id = self._extract_value(tweet.author_id)
         company = self._extract_value(tweet.company)
         priority = self._extract_value(tweet.priority)
-        
+
         row = [
             author_id,
             tweet.created_at.isoformat(),
             tweet.text,
-            len(tweet.text),  # text_length
+            len(tweet.text),
             company,
             priority,
-            datetime.now().isoformat()  # processed_at
+            datetime.now().isoformat()
         ]
-        
+
         writer.writerow(row)
-    
+
     def _extract_value(self, obj) -> str:
         """
-        Безпечна екстракція значення з Value Object.
-        
+        Safely extract value from Value Object.
+
         Args:
-            obj: Value Object або None
-            
+            obj: Value object or None
+
         Returns:
-            Значення у вигляді рядка або порожній рядок
+            String representation or empty string
         """
         if obj is None:
-            return ''
-        
-        # Якщо є атрибут value (Value Object)
-        if hasattr(obj, 'value'):
+            return ""
+
+        if hasattr(obj, "value"):
             return str(obj.value)
-        
-        # Інакше просто конвертуємо в рядок
+
         return str(obj)
-    
+
     def get_files_count(self) -> int:
         """
-        Підрахунок кількості створених CSV файлів.
-        
+        Count created CSV files.
+
         Returns:
-            Кількість файлів формату tweets_*.csv
+            Number of tweets_*.csv files
         """
-        files = [f for f in os.listdir(self.base_path) if f.startswith('tweets_') and f.endswith('.csv')]
+        files = [
+            f for f in os.listdir(self.base_path)
+            if f.startswith("tweets_") and f.endswith(".csv")
+        ]
         return len(files)

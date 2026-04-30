@@ -1,19 +1,20 @@
+# Use a lightweight Python base image
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# 1. Встановлюємо залежності (використовуємо твої поточні бібліотеки)
+# 1. Install dependencies (using your existing library stack)
 RUN pip install --no-cache-dir \
     kafka-python \
     pandas \
     python-dotenv
 
-# 2. Копіюємо ВЕСЬ код (src), щоб працювали всі імпорти
+# 2. Copy the ENTIRE source code (src) to ensure all internal imports work
 COPY src/ /app/src/
 COPY .env /app/.env
 
-# 3. Додаємо робочу директорію в шлях, щоб Python бачив модуль src
+# 3. Add the working directory to PYTHONPATH so Python recognizes the 'src' module
 ENV PYTHONPATH=/app
 
-# 4. Запускаємо через лаунчер (нам треба створити цей один короткий файл)
+# 4. Launch the application via the producer launcher
 CMD ["python", "src/presentation/producer_launcher.py"]

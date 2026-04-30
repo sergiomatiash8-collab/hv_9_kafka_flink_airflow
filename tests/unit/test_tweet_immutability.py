@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from dataclasses import FrozenInstanceError
 from src.domain.entities.tweet import Tweet
 from src.domain.value_objects.author_id import AuthorId
 from src.domain.value_objects.company import Company
@@ -7,19 +8,19 @@ from src.domain.value_objects.company import Company
 class TestTweetImmutability(unittest.TestCase):
 
     def test_tweet_is_frozen(self):
-        """Перевіряємо, що неможливо змінити атрибут створеного твіта."""
+        """Verify that it is impossible to modify an attribute of a created tweet."""
         tweet = Tweet(
             author_id=AuthorId("123"),
             created_at=datetime.now(),
             text="Initial text"
         )
         
-        # Спроба змінити текст має викликати помилку FrozenInstanceError
+        # Attempting to change the text should raise an Exception (specifically FrozenInstanceError)
         with self.assertRaises(Exception):
             tweet.text = "Changed text"
 
     def test_enrich_creates_new_instance(self):
-        """Перевіряємо, що метод enrich повертає НОВИЙ об'єкт, а не змінює старий."""
+        """Verify that the enrich method returns a NEW instance instead of modifying the old one."""
         original_tweet = Tweet(
             author_id=AuthorId("123"),
             created_at=datetime.now(),
@@ -28,14 +29,14 @@ class TestTweetImmutability(unittest.TestCase):
         
         new_tweet = original_tweet.enrich(
             company=Company.AMAZON,
-            priority=None # Припустимо, пріоритет поки неважливий
+            priority=None 
         )
         
-        # Перевіряємо, що це два різні об'єкти в пам'яті
+        # Check that these are two different objects in memory
         self.assertIsNot(original_tweet, new_tweet)
-        # Перевіряємо, що в оригінальному компанія залишилась порожньою
+        # Check that the original company remains empty (None)
         self.assertIsNone(original_tweet.company)
-        # А в новому вона встановлена
+        # Check that the new instance has the company set
         self.assertEqual(new_tweet.company, Company.AMAZON)
 
 if __name__ == "__main__":

@@ -1,21 +1,22 @@
 import json
 import logging
 from kafka import KafkaConsumer
-# Імпортуємо наш синглтон налаштувань
 from src.infrastructure.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
 class KafkaInfrastructureConsumer:
     """
-    Інфраструктурна реалізація для отримання даних з Kafka.
-    Клас не знає про логіку обробки, він лише вміє тягнути повідомлення.
+    Infrastructure implementation for consuming data from Kafka.
+
+    This class does not know anything about business logic.
+    It only knows how to read messages from Kafka.
     """
-    
+
     def __init__(self, topic: str = None):
-        # Якщо топік не передано, беремо дефолтний з налаштувань
+        # If topic is not provided, use default from settings
         self.topic = topic or settings.kafka.topic
-        
+
         self._consumer = KafkaConsumer(
             self.topic,
             bootstrap_servers=settings.kafka.bootstrap_servers,
@@ -26,12 +27,12 @@ class KafkaInfrastructureConsumer:
         )
 
     def consume(self):
-        """Генератор, який віддає повідомлення по одному"""
-        logger.info(f"[*] Starting consumption from topic: {self.topic}")
+        """Generator that yields messages one by one."""
+        logger.info(f"Starting consumption from topic: {self.topic}")
         try:
             for message in self._consumer:
-                # Повертаємо тільки корисне навантаження (payload)
+                # Return only payload
                 yield message.value
         except Exception as e:
-            logger.error(f"[-] Error while consuming from Kafka: {e}")
+            logger.error(f"Error while consuming from Kafka: {e}")
             raise

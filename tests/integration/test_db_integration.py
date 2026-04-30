@@ -1,6 +1,6 @@
 import sys
 import os
-# Додаємо корінь проєкту в шлях, щоб імпорти працювали
+# Add project root to path so imports work correctly
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.infrastructure.repositories.postgres_repository import PostgresTweetRepository
@@ -11,23 +11,23 @@ from src.domain.value_objects.priority import Priority
 from datetime import datetime
 
 def test_database_connection_and_save():
-    print("[*] Тестування підключення до БД...")
+    print("[*] Testing database connection...")
     repo = PostgresTweetRepository()
     
-    # Створюємо тестовий об'єкт твіта
+    # Create a test tweet object
     test_tweet = Tweet(
         author_id=AuthorId("test_user_123"),
         created_at=datetime.now(),
-        text="Це тестовий твіт для перевірки інтеграції",
-        company=Company.GOOGLE,  # Заміни на ті, що є у твоїх Value Objects
+        text="This is a test tweet for integration verification",
+        company=Company.GOOGLE,  # Use existing Value Objects
         priority=Priority.HIGH
     )
     
     try:
         repo.save(test_tweet)
-        print("[+ ] Успіх: Дані збережено в PostgreSQL!")
+        print("[+] Success: Data saved in PostgreSQL!")
     except Exception as e:
-        print(f"[-] Помилка: Не вдалося зберегти дані. Деталі: {e}")
+        print(f"[-] Error: Failed to save data. Details: {e}")
 
 if __name__ == "__main__":
     test_database_connection_and_save()

@@ -2,26 +2,26 @@ import os
 import logging
 from pyflink.table import EnvironmentSettings, TableEnvironment
 
-# Налаштування логування
+# Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def create_flink_environment():
     settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
     t_env = TableEnvironment.create(settings)
-    
+
     t_env.get_config().set("parallelism.default", "2")
     t_env.get_config().set("pipeline.name", "TweetEnrichmentPipeline")
-    
+
     t_env.get_config().set(
-        "pipeline.jars", 
+        "pipeline.jars",
         "file:///opt/flink/lib/flink-sql-connector-kafka-1.17.1.jar"
     )
     return t_env
 
 def create_source_table(t_env):
     kafka_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
-    
+
     t_env.execute_sql(f"""
         CREATE TABLE tweets_source (
             author_id STRING,
@@ -39,24 +39,24 @@ def create_source_table(t_env):
             'json.ignore-parse-errors' = 'true'
         )
     """)
-    logger.info("✓ Kafka source table created")
+    logger.info("Kafka source table created")
 
 def create_enrichment_logic(t_env):
     t_env.execute_sql("""
         CREATE VIEW enriched_tweets AS
-        SELECT 
-            author_id, 
-            created_at, 
+        SELECT
+            author_id,
+            created_at,
             `text`,
             CHAR_LENGTH(`text`) as text_length,
-            CASE 
+            CASE
                 WHEN author_id = '115852' THEN 'Amazon'
                 WHEN author_id = '115854' THEN 'Apple'
                 WHEN author_id = '17919972' THEN 'Uber'
                 WHEN author_id = '115873' THEN 'Microsoft'
                 ELSE 'Other'
             END as company,
-            CASE 
+            CASE
                 WHEN `text` LIKE '%broken%' OR `text` LIKE '%bad%' OR `text` LIKE '%error%' OR `text` LIKE '%issue%' THEN 'HIGH'
                 WHEN `text` LIKE '%help%' OR `text` LIKE '%please%' THEN 'MEDIUM'
                 ELSE 'NORMAL'
@@ -65,7 +65,7 @@ def create_enrichment_logic(t_env):
             DATE_FORMAT(TO_TIMESTAMP(created_at, 'yyyy-MM-dd HH:mm:ss'), 'dd_MM_yyyy_HH_mm') as file_partition
         FROM tweets_source
     """)
-    logger.info("✓ Enrichment view created")
+    logger.info("Enrichment view created")
 
 def create_postgres_sink(t_env):
     host = os.getenv("POSTGRES_HOST", "postgres")
@@ -73,7 +73,7 @@ def create_postgres_sink(t_env):
     user = os.getenv("POSTGRES_USER", "admin")
     pw = os.getenv("POSTGRES_PASSWORD", "admin123")
     jdbc_url = f"jdbc:postgresql://{host}:5432/{db}"
-    
+
     t_env.execute_sql(f"""
         CREATE TABLE postgres_sink (
             author_id STRING,
@@ -93,7 +93,7 @@ def create_postgres_sink(t_env):
             'driver' = 'org.postgresql.Driver'
         )
     """)
-    logger.info("✓ PostgreSQL sink created")
+    logger.info("PostgreSQL sink created")
 
 def create_file_sink(t_env):
     path = os.getenv("OUTPUT_DIR", "/opt/flink/usrlib/output")
@@ -113,10 +113,10 @@ def create_file_sink(t_env):
             'sink.partition-commit.policy.kind' = 'success-file'
         )
     """)
-    logger.info("✓ File sink created")
+    logger.info("File sink created")
 
 def create_kafka_sink(t_env):
-    """Новий сінк для відправки даних у Streamlit через Kafka"""
+    """New sink for sending data to Streamlit via Kafka"""
     kafka_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
     t_env.execute_sql(f"""
         CREATE TABLE kafka_sink (
@@ -133,7 +133,7 @@ def create_kafka_sink(t_env):
             'format' = 'json'
         )
     """)
-    logger.info("✓ Kafka sink (for Streamlit) created")
+    logger.info("Kafka sink (for Streamlit) created")
 
 def main():
     logger.info("Starting Tweet Enrichment Pipeline...")
@@ -146,14 +146,14 @@ def main():
         create_kafka_sink(t_env)
 
         statement_set = t_env.create_statement_set()
-        
-        # Записуємо в усі три місця одночасно
+
+        # Write to all three destinations simultaneously
         statement_set.add_insert_sql("INSERT INTO postgres_sink SELECT author_id, created_at, `text`, text_length, company, priority, processed_at FROM enriched_tweets")
         statement_set.add_insert_sql("INSERT INTO file_sink SELECT file_partition, author_id, created_at, `text`, company, priority FROM enriched_tweets")
         statement_set.add_insert_sql("INSERT INTO kafka_sink SELECT author_id, created_at, `text`, text_length, company, priority FROM enriched_tweets")
-        
+
         table_result = statement_set.execute()
-        logger.info("🚀 Pipeline is running. Writing to DB, CSV, and Kafka...")
+        logger.info("Pipeline is running. Writing to DB, CSV, and Kafka...")
         table_result.wait()
 
     except Exception as e:

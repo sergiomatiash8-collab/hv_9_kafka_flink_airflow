@@ -1,21 +1,21 @@
 import logging
 from pyflink.table import EnvironmentSettings, TableEnvironment
 
-# Налаштування логування для відстеження в консолі Docker
+# Logging configuration for Docker console tracking
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def run_tweet_processor():
-    logger.info("🚀 Запуск ULTIMATE-версії процесора...")
-    
-    # Створення стрімінгового оточення
+    logger.info("Starting ULTIMATE processor...")
+
+    # Create streaming environment
     env_settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
     t_env = TableEnvironment.create(env_settings)
-    
-    # Налаштування: DROP при спробі записати NULL у NOT NULL колонку
+
+    # Configuration: DROP when writing NULL into NOT NULL column
     t_env.get_config().set("table.exec.sink.not-null-enforcer", "DROP")
 
-    # 1. Джерело (Kafka) з ігноруванням помилок JSON
+    # 1. Source (Kafka) with JSON error ignoring
     t_env.execute_sql("""
         CREATE TABLE tweets_source (
             tweet_id STRING,
@@ -34,9 +34,9 @@ def run_tweet_processor():
             'json.fail-on-missing-field' = 'false'
         )
     """)
-    logger.info("✅ Таблиця джерела готова (з фільтрами помилок JSON).")
+    logger.info("Source table is ready (with JSON error handling).")
 
-    # 2. Приймач (PostgreSQL)
+    # 2. Sink (PostgreSQL)
     t_env.execute_sql("""
         CREATE TABLE postgres_sink (
             tweet_id STRING,
@@ -53,18 +53,18 @@ def run_tweet_processor():
             'driver' = 'org.postgresql.Driver'
         )
     """)
-    logger.info("✅ Таблиця приймача готова.")
+    logger.info("Sink table is ready.")
 
-    # 3. Вставка з подвійною перевіркою
+    # 3. Insert with validation
     t_env.execute_sql("""
         INSERT INTO postgres_sink
         SELECT tweet_id, text, author_id, created_at
         FROM tweets_source
-        WHERE tweet_id IS NOT NULL 
+        WHERE tweet_id IS NOT NULL
           AND author_id IS NOT NULL
           AND text IS NOT NULL
     """)
-    logger.info("🚀 Job відправлена! Тепер вона ігнорує будь-яке сміття.")
+    logger.info("Job submitted. Now it handles dirty data safely.")
 
 if __name__ == '__main__':
     run_tweet_processor()

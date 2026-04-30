@@ -1,12 +1,12 @@
 """
-Kafka Producer - точка входу для Producer контейнера.
+Kafka Producer - Entry point for the Producer container.
 
-Відповідальності:
-    1. Читання CSV файлу з RAW даними
-    2. Відправка в топік 'tweets' (без збагачення)
-    3. Симуляція реального потоку даних з контрольованою швидкістю
+Responsibilities:
+    1. Reading CSV file with RAW data
+    2. Sending to 'tweets' topic (without enrichment)
+    3. Simulating real data flow with controlled speed
 
-Clean Architecture шар: Presentation Layer
+Clean Architecture Layer: Presentation Layer
 """
 
 import pandas as pd
@@ -17,16 +17,16 @@ import logging
 from kafka import KafkaProducer
 from kafka.errors import KafkaError, NoBrokersAvailable
 
-# Налаштування логування
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# ==================== КОНФІГУРАЦІЯ ====================
+# ==================== CONFIGURATION ====================
 
-# Environment variables з fallback значеннями
+# Environment variables with fallback values
 KAFKA_SERVER = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
 KAFKA_TOPIC = os.environ.get('KAFKA_TOPIC', 'tweets')
 CSV_FILE = os.environ.get('CSV_FILE', '/app/raw_tweets.csv')
@@ -36,114 +36,114 @@ MESSAGES_PER_SECOND = int(os.environ.get('MESSAGES_PER_SECOND', '2'))
 
 def create_producer(max_retries: int = 10) -> KafkaProducer:
     """
-    Створення Kafka Producer з retry логікою.
+    Creates Kafka Producer with retry logic.
     
     Args:
-        max_retries: Максимальна кількість спроб підключення
+        max_retries: Maximum number of connection attempts
         
     Returns:
-        Налаштований KafkaProducer
+        Configured KafkaProducer
         
     Raises:
-        Exception: якщо не вдалося підключитися після всіх спроб
+        Exception: if connection fails after all attempts
     """
     retry_count = 0
-    retry_delay = 5  # секунд між спробами
+    retry_delay = 5  # seconds between attempts
     
     while retry_count < max_retries:
         try:
-            logger.info(f"🔌 Спроба {retry_count + 1}/{max_retries}: підключення до {KAFKA_SERVER}...")
+            logger.info(f"Attempt {retry_count + 1}/{max_retries}: connecting to {KAFKA_SERVER}...")
             
             producer = KafkaProducer(
                 bootstrap_servers=[KAFKA_SERVER],
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
                 
-                # Налаштування надійності
-                acks='all',  # Чекаємо підтвердження від всіх реплік
-                retries=5,   # Повтори у разі помилок
+                # Reliability settings
+                acks='all',  # Wait for all replicas to acknowledge
+                retries=5,   # Retries for delivery errors
                 
-                # Налаштування порядку повідомлень
+                # Ordering settings
                 max_in_flight_requests_per_connection=1,
                 
-                # Налаштування timeout
+                # Timeout settings
                 request_timeout_ms=30000,
                 
-                # Compression для економії bandwidth
+                # Compression for bandwidth efficiency
                 compression_type='gzip',
             )
             
-            logger.info(f"✅ З'єднано з Kafka: {KAFKA_SERVER}")
+            logger.info(f"Connected to Kafka: {KAFKA_SERVER}")
             return producer
             
         except NoBrokersAvailable as e:
             retry_count += 1
-            logger.warning(f"⚠️  Kafka недоступна: {e}")
+            logger.warning(f"Kafka unavailable: {e}")
             
             if retry_count < max_retries:
-                logger.info(f"⏳ Очікування {retry_delay} секунд перед наступною спробою...")
+                logger.info(f"Waiting {retry_delay} seconds before next attempt...")
                 time.sleep(retry_delay)
             else:
-                logger.error(f"❌ Вичерпано всі спроби підключення ({max_retries})")
+                logger.error(f"All connection attempts exhausted ({max_retries})")
                 raise
         
         except Exception as e:
             retry_count += 1
-            logger.error(f"❌ Помилка підключення до Kafka: {e}")
+            logger.error(f"Error connecting to Kafka: {e}")
             
             if retry_count >= max_retries:
                 raise
             
             time.sleep(retry_delay)
     
-    raise Exception(f"❌ Не вдалося підключитися до Kafka після {max_retries} спроб")
+    raise Exception(f"Failed to connect to Kafka after {max_retries} attempts")
 
 # ==================== DATA STREAMING ====================
 
 def stream_data():
     """
-    Головна функція стрімінгу даних з CSV в Kafka.
+    Main function for streaming data from CSV to Kafka.
     
-    Процес:
-        1. Читання CSV файлу
-        2. Створення Kafka Producer
-        3. Відправка даних з контрольованою швидкістю
-        4. Логування прогресу
+    Process:
+        1. Read CSV file
+        2. Create Kafka Producer
+        3. Send data with controlled speed
+        4. Log progress
     """
-    # 1. Перевірка наявності CSV файлу
+    # 1. Check if CSV exists
     if not os.path.exists(CSV_FILE):
-        raise FileNotFoundError(f"❌ CSV файл не знайдено: {CSV_FILE}")
+        raise FileNotFoundError(f"CSV file not found: {CSV_FILE}")
     
-    # 2. Читання CSV
-    logger.info(f"📖 Читання даних з: {CSV_FILE}")
+    # 2. Read CSV
+    logger.info(f"Reading data from: {CSV_FILE}")
     try:
         df = pd.read_csv(CSV_FILE, encoding='utf-8')
         total_records = len(df)
-        logger.info(f"📊 Знайдено {total_records} записів")
+        logger.info(f"Found {total_records} records")
     except Exception as e:
-        logger.error(f"❌ Помилка читання CSV: {e}")
+        logger.error(f"Error reading CSV: {e}")
         raise
     
-    # 3. Створення Producer
+    # 3. Create Producer
     producer = create_producer()
     
-    # 4. Розрахунок затримки між повідомленнями
+    # 4. Calculate delay between messages
     delay = 1.0 / MESSAGES_PER_SECOND
     
-    # 5. Відправка даних
+    # 5. Send data
     sent_count = 0
     error_count = 0
     start_time = time.time()
     
     logger.info("=" * 70)
-    logger.info(f"🚀 ПОЧАТОК ВІДПРАВКИ ДАНИХ")
-    logger.info(f"   Топік: {KAFKA_TOPIC}")
-    logger.info(f"   Швидкість: {MESSAGES_PER_SECOND} повідомлень/сек")
-    logger.info(f"   Загальна кількість: {total_records}")
+    logger.info("DATA TRANSMISSION STARTED")
+    logger.info(f"   Topic: {KAFKA_TOPIC}")
+    logger.info(f"   Speed: {MESSAGES_PER_SECOND} messages/sec")
+    logger.info(f"   Total records: {total_records}")
     logger.info("=" * 70)
     
     try:
         for index, row in df.iterrows():
-            # Створення повідомлення (RAW дані, БЕЗ збагачення)
+            # Create message (RAW data, WITHOUT enrichment)
             message = {
                 "author_id": str(row['author_id']),
                 "created_at": str(row['created_at']),
@@ -151,65 +151,65 @@ def stream_data():
             }
             
             try:
-                # Відправка в Kafka (асинхронно)
+                # Send to Kafka (asynchronous)
                 future = producer.send(KAFKA_TOPIC, value=message)
                 
-                # Чекаємо підтвердження (для гарантії доставки)
+                # Wait for confirmation
                 record_metadata = future.get(timeout=10)
                 
                 sent_count += 1
                 
-                # Логування прогресу кожні 50 повідомлень
+                # Log progress every 50 messages
                 if sent_count % 50 == 0:
                     elapsed = time.time() - start_time
                     rate = sent_count / elapsed
                     
                     logger.info(
-                        f"📤 Відправлено: {sent_count}/{total_records} "
+                        f"Sent: {sent_count}/{total_records} "
                         f"({(sent_count/total_records*100):.1f}%) | "
-                        f"Швидкість: {rate:.2f} msg/sec | "
+                        f"Rate: {rate:.2f} msg/sec | "
                         f"Partition: {record_metadata.partition}, Offset: {record_metadata.offset}"
                     )
                 
             except KafkaError as e:
                 error_count += 1
-                logger.error(f"❌ Помилка відправки повідомлення {index}: {e}")
+                logger.error(f"Error sending message {index}: {e}")
                 continue
             
-            # Затримка для симуляції реального потоку
+            # Delay to simulate real-time stream
             time.sleep(delay)
         
-        # Flush буфера (чекаємо відправки всіх повідомлень)
-        logger.info("⏳ Flush буфера Producer...")
+        # Flush buffer
+        logger.info("Flushing Producer buffer...")
         producer.flush()
         
-        # Фінальна статистика
+        # Final statistics
         elapsed = time.time() - start_time
         actual_rate = sent_count / elapsed
         
         logger.info("=" * 70)
-        logger.info("✅ ВІДПРАВКУ ЗАВЕРШЕНО")
+        logger.info("TRANSMISSION COMPLETED")
         logger.info("=" * 70)
-        logger.info(f"✅ Успішно відправлено: {sent_count}/{total_records}")
-        logger.info(f"❌ Помилок: {error_count}")
-        logger.info(f"⏱️  Час роботи: {elapsed:.2f} секунд")
-        logger.info(f"⚡ Фактична швидкість: {actual_rate:.2f} msg/sec")
+        logger.info(f"Successfully sent: {sent_count}/{total_records}")
+        logger.info(f"Errors: {error_count}")
+        logger.info(f"Runtime: {elapsed:.2f} seconds")
+        logger.info(f"Actual rate: {actual_rate:.2f} msg/sec")
         logger.info("=" * 70)
         
     except KeyboardInterrupt:
-        logger.info("⚠️  Зупинка Producer (отримано SIGINT)")
-        logger.info(f"📊 Відправлено: {sent_count}/{total_records} перед зупинкою")
+        logger.info("Stopping Producer (SIGINT received)")
+        logger.info(f"Sent: {sent_count}/{total_records} before stopping")
         
     finally:
-        # Закриття Producer
+        # Close Producer
         producer.close()
-        logger.info("🏁 Producer зупинено")
+        logger.info("Producer stopped")
 
 # ==================== ENTRY POINT ====================
 
 if __name__ == "__main__":
     logger.info("=" * 70)
-    logger.info("🎬 KAFKA PRODUCER LAUNCHER - STARTING")
+    logger.info("KAFKA PRODUCER LAUNCHER - STARTING")
     logger.info("=" * 70)
     logger.info(f"Kafka Server: {KAFKA_SERVER}")
     logger.info(f"Target Topic: {KAFKA_TOPIC}")
@@ -220,5 +220,5 @@ if __name__ == "__main__":
     try:
         stream_data()
     except Exception as e:
-        logger.error(f"💥 Критична помилка: {e}", exc_info=True)
+        logger.error(f"Critical error: {e}", exc_info=True)
         exit(1)

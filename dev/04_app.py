@@ -4,7 +4,7 @@ import json
 import time
 
 st.set_page_config(page_title="Twitter Stream", layout="wide")
-st.title("📊 Real-time Tweets Monitoring")
+st.title("Real-time Tweets Monitoring")
 
 @st.cache_resource
 def get_consumer():
@@ -34,7 +34,7 @@ if msg is not None and not msg.error():
 if st.session_state.data:
     st.table(st.session_state.data[:15])
 else:
-    st.write("Чекаю на дані з Kafka...")
+    st.write("Waiting for data from Kafka...")
 
 time.sleep(1)
 st.rerun()

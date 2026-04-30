@@ -4,7 +4,7 @@ from typing import Dict
 class Company(Enum):
     """
     Company Value Object.
-    Централізоване визначення компаній-об'єктів моніторингу.
+    Central definition of monitored companies.
     """
     AMAZON = "Amazon"
     APPLE = "Apple"
@@ -15,8 +15,8 @@ class Company(Enum):
     @classmethod
     def from_author_id(cls, author_id: str) -> 'Company':
         """
-        Domain Logic: Відображення автора на компанію.
-        Це ядро бізнес-правил, яке тепер легко тестувати юніт-тестами.
+        Domain logic: mapping author to company.
+        Core business rule that is easily unit-testable.
         """
         mapping: Dict[str, 'Company'] = {
             "115852": cls.AMAZON,
