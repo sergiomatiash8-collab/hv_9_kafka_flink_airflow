@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # ========== Zookeeper (Координатор для Kafka) ==========
+  # ========== Zookeeper ==========
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: zookeeper
@@ -16,7 +16,7 @@ services:
     networks:
       - kafka-network
 
-  # ========== Kafka (Шина даних) ==========
+  # ========== Kafka  ==========
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: kafka
@@ -41,7 +41,7 @@ services:
     networks:
       - kafka-network
 
-  # ========== PostgreSQL (Основна база для твітів) ==========
+  # ========== PostgreSQL  ==========
   postgres:
     image: postgres:15
     container_name: postgres
@@ -119,38 +119,116 @@ services:
     networks:
       - kafka-network
 
-  # ========== Airflow (Оркестратор) ==========
-  airflow:
+  
+  # ========== Airflow Init  ==========
+  airflow-init:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: airflow
-    ports:
-      - "8080:8080"
+    container_name: airflow-init
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - AIRFLOW__CORE__FERNET_KEY=FB0o_zt4e3Ziq3LdUUO7F2Z95cvFFx16hU8jTeR1ASM=
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: >
-      bash -c "
-      airflow db init &&
-      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@admin.com || true &&
-      airflow scheduler & airflow webserver"
+      - ./src:/opt/airflow/src
+    user: "50000:0"
+    command: db migrate
+    networks:
+      - kafka-network
+ 
+  # ========== Airflow Webserver ==========
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow-webserver
+    restart: always
     depends_on:
       postgres-airflow:
         condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
       kafka:
         condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__FERNET_KEY=FB0o_zt4e3Ziq3LdUUO7F2Z95cvFFx16hU8jTeR1ASM=
+      - AIRFLOW__WEBSERVER__SECRET_KEY=airflow_secret_key
+      - PYTHONPATH=/opt/airflow
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=tweets_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "50000:0"
+    command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - kafka-network
+ 
+  # ========== Airflow Scheduler ==========
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airflow-scheduler
+    restart: always
+    depends_on:
+      postgres-airflow:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__FERNET_KEY=FB0o_zt4e3Ziq3LdUUO7F2Z95cvFFx16hU8jTeR1ASM=
+      - PYTHONPATH=/opt/airflow
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=tweets_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./src:/opt/airflow/src
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "50000:0"
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - kafka-network
 
-  # ========== Kafka Producer (Генератор) ==========
+  # ========== Kafka Producer  ==========
   producer:
     build:
       context: .

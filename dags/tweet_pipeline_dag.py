@@ -96,7 +96,7 @@ with DAG(
     
     # ==================== TASK 2: Topics creating ====================
     
-     create_kafka_topics = BashOperator(
+    create_kafka_topics = BashOperator(
         task_id='create_kafka_topics',
         bash_command=f"""
             # Create topic for RAW data
@@ -129,9 +129,9 @@ with DAG(
         - **tweets_enriched**: for enriched data from Flink
 
         Parameters:
-        - Partitions: 3 (parallel processing)
-        - Replication: 1 (dev environment)
-        - Retention: 24 hours
+            - Partitions: 3 (parallel processing)
+            - Replication: 1 (dev environment)
+            - Retention: 24 hours
         """
     )
     
@@ -164,99 +164,98 @@ with DAG(
             "created_at": "2024-10-27T14:30:00",
             "text": "Sample tweet text..."
         }
-```
         """
-    )
-    
-    # ==================== TASK 4: START FLINK JOB ====================
-    
-    submit_flink_enrichment_job = BashOperator(
-        task_id='submit_flink_enrichment_job',
-        bash_command=f"""
-            echo " Start Flink Job for data enrichment..."
-            
-            # Run Python Flink Job inside JobManager container
-        docker exec flink-jobmanager \
-            flink run \
-            --python /opt/flink/usrlib/tweet_enrichment_processor.py \
-            --jobmanager flink-jobmanager:8081 \
-            --detached
+)
 
-        echo "Flink Job started in detached mode"
-        echo "Check status: http://localhost:8081"
-            
-            # Wait 10 seconds for job startup
-            sleep 10
-        """,
-        doc_md="""
-        ### Flink Enrichment Job
-    Starts Apache Flink Job for stream enrichment.
+# ==================== TASK 4: START FLINK JOB ====================
 
-    Enrichment includes:
+submit_flink_enrichment_job = BashOperator(
+    task_id='submit_flink_enrichment_job',
+    bash_command=f"""
+        echo " Start Flink Job for data enrichment..."
+        
+        # Run Python Flink Job inside JobManager container
+    docker exec flink-jobmanager \
+        flink run \
+        --python /opt/flink/usrlib/tweet_enrichment_processor.py \
+        --jobmanager flink-jobmanager:8081 \
+        --detached
+
+    echo "Flink Job started in detached mode"
+    echo "Check status: http://localhost:8081"
+        
+        # Wait 10 seconds for job startup
+        sleep 10
+    """,
+    doc_md="""
+    ### Flink Enrichment Job
+Starts Apache Flink Job for stream enrichment.
+
+Enrichment includes:
     - **text_length**: text length
     - **processed_at**: processing timestamp
     - **company**: detected company (Apple/Google/Microsoft/Amazon)
     - **priority**: priority based on length (HIGH/MEDIUM/LOW)
 
-    Input: topic 'tweets'
-    Output: topic 'tweets_enriched'
-        """
-    )
-    
-    # ==================== TASK 5: START CONSUMER ====================
-    
-    run_final_consumer = DockerOperator(
-        task_id='run_final_consumer',
-        image=CONSUMER_IMAGE,
-        container_name='airflow_consumer_{{ ts_nodash }}',
-        api_version='auto',
-        auto_remove=True,
-        docker_url="unix://var/run/docker.sock",
-        network_mode=NETWORK_MODE,
-        environment={
-            'KAFKA_BOOTSTRAP_SERVERS': KAFKA_BOOTSTRAP_SERVERS_INTERNAL,
-            'KAFKA_TOPIC': TOPIC_ENRICHED,  
-            'POSTGRES_HOST': 'postgres',
-            'POSTGRES_PORT': '5432',
-            'POSTGRES_USER': 'admin',
-            'POSTGRES_PASSWORD': 'admin123',
-            'POSTGRES_DB': 'tweets_db',
-            'CSV_OUTPUT_DIR': '/app/output',
-        },
-        mount_tmp_dir=False,
-        tty=True,
-        execution_timeout=timedelta(minutes=15),
-        doc_md="""
-        ### Final Consumer
-    Consumes enriched data from topic 'tweets_enriched' and stores it in:
-
-    1. **PostgreSQL**: table `tweets_enriched`
-    2. **CSV files**: format `tweets_dd_mm_yyyy_hh_mm.csv`
-
-    CSV splitting: by minute (each minute = new file)
-        """
-    )
-    
-    # ==================== EXECUTION FLOW DEFINITION ====================
-    
+Input: topic 'tweets'
+Output: topic 'tweets_enriched'
     """
-    Execution graph:
-    
+)
+
+# ==================== TASK 5: START CONSUMER ====================
+
+run_final_consumer = DockerOperator(
+    task_id='run_final_consumer',
+    image=CONSUMER_IMAGE,
+    container_name='airflow_consumer_{{ ts_nodash }}',
+    api_version='auto',
+    auto_remove=True,
+    docker_url="unix://var/run/docker.sock",
+    network_mode=NETWORK_MODE,
+    environment={
+        'KAFKA_BOOTSTRAP_SERVERS': KAFKA_BOOTSTRAP_SERVERS_INTERNAL,
+        'KAFKA_TOPIC': TOPIC_ENRICHED,  
+        'POSTGRES_HOST': 'postgres',
+        'POSTGRES_PORT': '5432',
+        'POSTGRES_USER': 'admin',
+        'POSTGRES_PASSWORD': 'admin123',
+        'POSTGRES_DB': 'tweets_db',
+        'CSV_OUTPUT_DIR': '/app/output',
+    },
+    mount_tmp_dir=False,
+    tty=True,
+    execution_timeout=timedelta(minutes=15),
+    doc_md="""
+    ### Final Consumer
+Consumes enriched data from topic 'tweets_enriched' and stores it in:
+
+1. **PostgreSQL**: table `tweets_enriched`
+2. **CSV files**: format `tweets_dd_mm_yyyy_hh_mm.csv`
+
+CSV splitting: by minute (each minute = new file)
+    """
+)
+
+# ==================== EXECUTION FLOW DEFINITION ====================
+
+"""
+Execution graph:
+
+check_kafka_availability 
+    ↓
+create_kafka_topics
+    ↓
+run_kafka_producer
+    ↓
+submit_flink_enrichment_job
+    ↓
+run_final_consumer
+"""
+
+(
     check_kafka_availability 
-        ↓
-    create_kafka_topics
-        ↓
-    run_kafka_producer
-        ↓
-    submit_flink_enrichment_job
-        ↓
-    run_final_consumer
-    """
-    
-    (
-        check_kafka_availability 
-        >> create_kafka_topics 
-        >> run_kafka_producer 
-        >> submit_flink_enrichment_job 
-        >> run_final_consumer
-    )
+    >> create_kafka_topics 
+    >> run_kafka_producer 
+    >> submit_flink_enrichment_job 
+    >> run_final_consumer
+)
